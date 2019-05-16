@@ -22,9 +22,9 @@ int main(void){
 	if(pid == 0){
 		chdir(ROOT_DIR);
 		setsid();
-		close(STDIN_FILENO);
+		/*close(STDIN_FILENO);
    		close(STDOUT_FILENO);
-   		close(STDERR_FILENO);
+   		close(STDERR_FILENO);*/
 		Daemon();
 	}
 
@@ -123,10 +123,46 @@ void Daemon(void) {
 	logfile = fopen("/.sniffer.log", "w+");
 
 	Data data = {"0.0.0.0", 1};
-	list = Create(data);
+	//list = Create(data);
 	root = create(root, data);
 	CountDevices();
+	int master = socket(AF_INET, SOCK_STREAM , IPPROTO_TCP);
+	if(master == -1){
+		perror("socket");
+		exit(1);
+	}
+	struct sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(12345);
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if(bind(master, (struct sockaddr *)&addr, sizeof(addr)) == -1){
+		perror("bind");
+		exit(2);
+	}
+	if(listen(master, SOMAXCONN) == -1){
+		perror("listen");
+		exit(3);
+	}
+	set_nonblock(master);
+	int optval = 1;
+	if(setsockopt(master, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1){
+		perror("setsockopt");
+		exit(4);
+	}
 
+	static int buffer[1024];
+	while(1){
+		int slave = accept(master, NULL, NULL);
+		
+		ssize_t bytes = recv(slave, buffer, 1024, MSG_NOSIGNAL);
+		buffer[bytes] = '\0';
+		send(slave, buffer, bytes, MSG_NOSIGNAL);
+
+		/*shutdown(slave, SHUT_RDWR);
+		close(slave);*/
+	}
+		
+	
 	char * dfldev = devs[0];
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t * handler = pcap_open_live(dfldev, BUFSIZ, 1, 10000, errbuf);
@@ -135,6 +171,7 @@ void Daemon(void) {
 		fprintf(logfile, "Couldn't open device %s : %s\n" , dfldev, errbuf);
 		exit(1);
 	}
+
 
 	u_char * packet = 0;
 	struct pcap_pkthdr header;
@@ -172,4 +209,17 @@ void Daemon(void) {
 			n->key.count_ip += 1;
 		}
 	}				
+	close(master);
+}
+
+int set_nonblock(int fd){
+	int flags;
+#if defined(O_NONBLOCK)
+	if((flags = fcntl(fd, F_GETFL,0)) == -1)
+		flags = 0;
+	return fcntl(fd, F_SETFL, flags|O_NONBLOCK);
+#else 
+	flags = 1;
+	return ioctl(fd, FIOBIO, &flags);
+#endif
 }

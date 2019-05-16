@@ -5,20 +5,34 @@
 
 int main(int argc, char ** argv){
 	const struct option daemon_opts[] = {
-        	{"start", no_argument, NULL, 'r'},
-	 	{"stop", no_argument, NULL, 'p'},
+        	{"start", optional_argument, NULL, 'r'},
+	 		{"stop", no_argument, NULL, 'p'},
 	    	{"show", required_argument, NULL, 'w'},
 	    	{"select", required_argument, NULL, 's'},
 	    	{"stat", required_argument, NULL, 't'},
 	    	{"help", no_argument, NULL, 'h'},
 	    	{NULL, 0, NULL, 0}
 	};
+	int master = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if(master == -1){
+		perror("socket");
+		exit(1);
+	}
+	struct sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(12345);
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	if(connect(master, (struct sockaddr *) &addr, sizeof(addr)) == -1){
+		perror("connect");
+		exit(2);
+	}
+//	set_nonblock(master);
 
 	int current_option;
 	while((current_option = getopt_long(argc, argv, "r:pw:s:t:h", daemon_opts, NULL)) != -1){
 		switch(current_option){			
 			case 'r':					
-				StartDaemon();
+				StartDaemon(master);
 				return 0;
 			case 'p':
 				StopDaemon();
@@ -68,11 +82,19 @@ void StopDaemon(void) {
 
 }
 
-void StartDaemon(void) {
-		int pid = FindPidDaemon();
+void StartDaemon(int master) {
+	
+	static char buffer[128];
+	send(master, default_iface, strlen(default_iface), MSG_NOSIGNAL);
+	ssize_t bytes = recv(master, buffer, 128, MSG_NOSIGNAL);
+	buffer[bytes] = '\0';
+	fprintf(stderr, "%s\n", buffer);
+
+/*		int pid = FindPidDaemon();
 		if(pid > 0)
 				kill(pid, SIGUSR2);
 		else fprintf(stderr, "Don`t find pid daemon\n");
+*/
 }
 
 void StatDaemon(const char * device) {
@@ -136,4 +158,16 @@ void PrintOptionsInfo(void) {
 		fprintf(stderr, AC_GREEN "%s", help_str);
 		fprintf(stdout, ""AC_RESET);
 		return;
+}
+
+int set_nonblock(int fd){
+	int flags;
+#if defined(O_NONBLOCK)
+	if((flags = fcntl(fd, F_GETFL,0)) == -1)
+		flags = 0;
+	return fcntl(fd, F_SETFL, flags|O_NONBLOCK);
+#else 
+	flags = 1;
+	return ioctl(fd, FIOBIO, &flags);
+#endif
 }

@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <signal.h>
@@ -13,8 +17,9 @@
 extern char * optarg;
 extern int optind;
 
+const char * const default_iface = "eth0";
 static const char * const help_str = 
-          "Usage: cli_process [options]...\n"
+          "Usage: intfcd [options]...\n"
           "Options: \n"
           "--start, -r                packets are being sniffed from now on from default iface(eth0)\n"
           "--stop, -p                 packets are not sniffed\n"
@@ -27,10 +32,10 @@ static const char * const help_str =
 
 int FindPidDaemon(void);
 void StopDaemon(void);
-void StartDaemon(void);
+void StartDaemon(int);
 void StatDaemon(const char *);
 void ShowPacketsIPDaemon(const char *);
 void SelectDeviceDaemon(const char *);
 void PrintOptionsInfo(void);
-
+int set_nonblock(int);
 #endif

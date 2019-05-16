@@ -24,7 +24,7 @@
 #include <arpa/inet.h>
 
 #define ROOT_DIR "/"
-
+const char * const default_iface = "eth0";
 
 //ethernet headers are always exactly 14 bytes 
 #define SIZE_ETHERNET 14
@@ -58,5 +58,6 @@ void handler_stop(int);
 void handler_start(int);
 void EmptyLoop(void);
 void SavePid(void);
+int set_nonblock(int);
 
 #endif
