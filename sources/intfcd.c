@@ -1,6 +1,6 @@
 
-#include "headers/intfcd.h"
-#include "headers/coloroutput.h"
+#include "../headers/intfcd.h"
+#include "../headers/coloroutput.h"
 
 
 

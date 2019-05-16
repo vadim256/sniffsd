@@ -1,7 +1,7 @@
 
-#include "headers/coloroutput.h"
-#include "headers/container.h"
-#include "headers/sniffsd.h"
+#include "../headers/coloroutput.h"
+#include "../headers/container.h"
+#include "../headers/sniffsd.h"
 
 
 char devs[N][M];
