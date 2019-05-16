@@ -5,7 +5,7 @@ project(sniffsd)
 
 
 set(SOURCE_SNIFFSD ./sources/sniffsd.c ./sources/container.c)
-set(SNIFFSD sniffd)
+set(SNIFFSD sniffsd)
 set(CMAKE_CXX_STANDARD 11)
 include(FindPCAP.cmake)
 

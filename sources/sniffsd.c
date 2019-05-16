@@ -6,7 +6,8 @@
 
 char devs[N][M];
 FILE * logfile = NULL;
-ListIP *list;	 
+ListIP *list = NULL;	 
+node * root = NULL;
 static int status = 0;
 
 int main(void){
@@ -36,7 +37,9 @@ void handler_stat(int num) {
 		return;
 	}
 	fprintf(stat,"Statistics for this device: %s\n", devs[0]);
-	Print(list, stat);
+	/*Print(list, stat);*/
+	node * tmproot = root;
+	preorder(tmproot, stat);
 	fflush(stat);
 	fclose(stat);
 }
@@ -121,6 +124,7 @@ void Daemon(void) {
 
 	Data data = {"0.0.0.0", 1};
 	list = Create(data);
+	root = create(root, data);
 	CountDevices();
 
 	char * dfldev = devs[0];
@@ -154,10 +158,18 @@ void Daemon(void) {
 		Data data;
 		strcpy(data.address_ip, inet_ntoa(ip->ip_src));
 		data.count_ip = 1;
-		ListIP * f = Find(list, data);
-		if(f == NULL)
-		AddList(&list, data);
-		else f->d.count_ip += 1;
 		
+		/*ListIP * f = Find(list, data);
+		if(f == NULL)
+			AddList(&list, data);
+		else f->d.count_ip += 1;*/
+		
+		node * tmproot = root;
+		node * n = search(tmproot, data);
+		if(n == NULL){
+			root = add(root, data);
+		} else {
+			n->key.count_ip += 1;
+		}
 	}				
 }

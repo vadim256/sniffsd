@@ -3,7 +3,6 @@
 #include "../headers/coloroutput.h"
 
 
-
 int main(int argc, char ** argv){
 	const struct option daemon_opts[] = {
         	{"start", no_argument, NULL, 'r'},

@@ -19,4 +19,15 @@ ListIP * Find(ListIP *, const Data);
 void AddList(ListIP **, const Data);
 void Clear(ListIP **);
 
+typedef struct tree {
+    Data key;
+    struct tree * left;
+    struct tree * right;
+    struct tree * parent;
+} node;
+
+node * create(node *, Data);
+node * add(node *, Data);
+node * search(node *, Data);
+void preorder(node *, FILE *);
 #endif
