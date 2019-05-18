@@ -1,8 +1,6 @@
 #ifndef SNIFFSD_H_
 #define SNIFFSD_H_
 
-#include <signal.h>
-
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -18,14 +16,21 @@
 #include <pcap.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
-
+#include <stdbool.h>
 #include <ctype.h>
 #include <errno.h>
 #include <arpa/inet.h>
 
-#define ROOT_DIR "/"
-const char * const default_iface = "eth0";
 
+#define ROOT_DIR "/"
+#define LPBACK_IP "0.0.0.0"
+#define F_IP 1
+#define START "start"
+#define NETHERNET "eth0"
+#define SELECT "select"
+#define SHOW "show"
+#define STAT "stat"
+#define STOP "stop"
 //ethernet headers are always exactly 14 bytes 
 #define SIZE_ETHERNET 14
 
@@ -50,14 +55,16 @@ struct sniff_ip {
 #define IP_V(ip)                (((ip)->ip_vhl) >> 4)
 #define N 128
 #define M 256
-
+#define BSIZE  1024
 void CountDevices(void);
 void Daemon(void);
-FILE * OpenPwdFile(const char *);
-void handler_stop(int);
-void handler_start(int);
-void EmptyLoop(void);
-void SavePid(void);
+
+int SocketSettings(void);
 int set_nonblock(int);
+pcap_t *JoinInterface(const char *);
+
+void StopLoopHandler(int);
+int SavePid(void);
+
 
 #endif

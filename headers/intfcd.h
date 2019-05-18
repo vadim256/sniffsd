@@ -4,23 +4,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <stdbool.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
+#include <sys/wait.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <getopt.h>
 #include <signal.h>
 
-#include <getopt.h>
 extern char * optarg;
 extern int optind;
+#define BUF_SIZE 1024
 
-const char * const default_iface = "eth0";
 static const char * const help_str = 
           "Usage: intfcd [options]...\n"
           "Options: \n"
+          "--go, -g                   run the background process [sniffsd]\n"
           "--start, -r                packets are being sniffed from now on from default iface(eth0)\n"
           "--stop, -p                 packets are not sniffed\n"
           "--show, -w [ip]            count print number of packets received from ip address\n"
@@ -30,12 +31,17 @@ static const char * const help_str =
           "--help, -h                 show usage information\n";
  
 
-int FindPidDaemon(void);
-void StopDaemon(void);
-void StartDaemon(int);
-void StatDaemon(const char *);
-void ShowPacketsIPDaemon(const char *);
-void SelectDeviceDaemon(const char *);
+int StopDaemon();
+int StartDaemon();
+
+int StatDaemon(const char *);
+int ShowPacketsIPDaemon(const char *);
+int SelectDeviceDaemon(const char *);
+
 void PrintOptionsInfo(void);
-int set_nonblock(int);
+int SendDaemonCommand(const char *, const char*);
+int EstablishToConnection(int *);
+int CreateDaemon(void);
+int FindPidDaemon(void);
+
 #endif
