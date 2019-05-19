@@ -1,8 +1,26 @@
 #include "../headers/coloroutput.h"
 #include "../headers/sniffsd.h"
 
-static char devs[N][M];
-static sig_atomic_t statusLoop = 0, statusPrev = 0;
+void NetData::AddPacket(const std::string & address_ip){
+	auto search = packets_m.find(address_ip);
+	if(search != packets_m.end()){
+		packets_m[address_ip] += 1;
+	} else {
+		packets_m.insert(std::pair<std::string, std::size_t>(address_ip, 1));
+	}
+}
+
+int NetData::FindPacket(const std::string & address_ip){
+	auto it = packets_m.find(address_ip);
+	if(it != packets_m.end()){
+		return (int)it->second;
+	}
+	return -1;
+}
+NetData::Packets  NetData::GetPackets() const { return packets_m; }
+
+static int statusLoop = 0;
+static std::string currname;
 int main(void){
 
 	pid_t pid = fork();
@@ -21,96 +39,165 @@ int main(void){
 
 void Daemon(void) { 
 	
-	SavePid();
-	CountDevices();
-	
-	signal(SIGUSR1, StopLoopHandler);
-
+	NameDevices devs;
+	CountDevices(devs);
+	currname = devs.front();
 	int master = SocketSettings();
 	if(master == -1){
 		return;
 	}
-	
+	Slaves SlaveSockets;
+	NetDevices Devices;
 	static char buffer[BSIZE];
 	pcap_t * handler = 0;
+	for(int i = 0; i < 10; ++i)
+		Devices["wlp3s0"].AddPacket("0.0.0.0");
 	while(1){
-		int slave = accept(master, NULL, NULL);
-		ssize_t bytes = recv(slave, buffer, BSIZE, MSG_NOSIGNAL);
-		if(bytes > 0)
-			buffer[bytes] = '\0';
-			char * str = strtok(buffer, " ");
-		if(strcmp(str, START) == 0){
-			handler = JoinInterface(NETHERNET);
-			if(!handler){
-				fprintf(stderr, AC_RED"Unable to join the interface\n"AC_RESET);
-				return;
+		
+		fd_set Set;
+		FD_ZERO(&Set);
+		FD_SET(master, &Set);
+
+		for(auto Iter = SlaveSockets.begin(); Iter != SlaveSockets.end(); ++Iter){
+			FD_SET(*Iter, &Set);
+		}
+
+		int Max = std::max(master, *std::max_element(SlaveSockets.begin(), SlaveSockets.end()));
+		select(Max+1, &Set,NULL,NULL,NULL);
+
+		for(auto Iter = SlaveSockets.begin(); Iter != SlaveSockets.end(); ++Iter){
+			if(FD_ISSET(*Iter, &Set)){
+				int RecvSize = recv(*Iter, buffer, BSIZE, MSG_NOSIGNAL);
+				if(RecvSize == 0 && errno != EAGAIN){
+					shutdown(*Iter, SHUT_RDWR);
+					close(*Iter);	
+					SlaveSockets.erase(Iter);
+				} else if(RecvSize != 0){
+
+						buffer[RecvSize] = '\0';
+						char * str = strtok(buffer, " ");
+
+						if(strcmp(str, START) == 0){
+							handler = JoinInterface(devs, NETHERNET);
+							if(!handler){
+								fprintf(stderr, AC_RED"Unable to join the interface\n"AC_RESET);					
+								return;
+							}
+							statusLoop = 1;
+
+						} else if(strcmp(str, STAT) == 0){
+							if(strcmp(buffer, STAT) == 0){
+								for(auto d : Devices){
+									sprintf(buffer, "Device: %s\n IP Addresses\tCounts\n", d.first.c_str());
+									send(*Iter, buffer, strlen(buffer)+1, MSG_NOSIGNAL);
+									for(auto it : d.second.GetPackets()){
+										sprintf(buffer, "%s : %zd", it.first.c_str(), it.second);
+										send(*Iter, buffer, strlen(buffer)+1, MSG_NOSIGNAL);
+									}
+								}
+								shutdown(*Iter, SHUT_RDWR);
+								close(*Iter);
+								SlaveSockets.erase(Iter);							
+							} else {
+								int i;
+								for(i = 0; buffer[i] == str[i] && str[i] != '\0'; ++i)
+									;
+								std::string str_name = buffer+i+1;
+								auto now = Devices.find(str_name);
+								if(now != Devices.end()){
+									sprintf(buffer, "Device: %s\n IP Addresses\tCounts\n", str_name.c_str());
+									send(*Iter, buffer, strlen(buffer)+1, MSG_NOSIGNAL);
+									for(auto it : Devices[str_name].GetPackets()){
+										sprintf(buffer, "%s : %zd", it.first.c_str(), it.second);
+										send(*Iter, buffer, strlen(buffer)+1, MSG_NOSIGNAL);
+									}
+									shutdown(*Iter, SHUT_RDWR);
+									close(*Iter);
+									SlaveSockets.erase(Iter);							
+								}
+							}							
+						} else if(strcmp(str, STOP) == 0){
+							statusLoop = 0;
+						} else if(strcmp(str, SELECT) == 0){
+							int i;
+							for(i = 0; buffer[i] == str[i] && str[i] != '\0'; ++i)
+								;
+							std::string str_name = buffer+i+1;
+							handler = JoinInterface(devs, str_name.c_str());
+							if(!handler){
+								fprintf(stderr, AC_RED"Unable to join the interface\n"AC_RESET);
+							} 
+						} else if(strcmp(str, SHOW) == 0){
+							int i;
+							for(i = 0; buffer[i] == str[i] && str[i] != '\0'; ++i)
+								;
+							std::string str_ip = buffer+i+1;
+							int tmp;
+							std::string dname;
+							bool isFind = false;
+							for(auto it : Devices){
+								tmp = it.second.FindPacket(str_ip);
+								if(tmp > 0){
+									dname = it.first;
+									isFind = true;
+									break;
+								}
+							}
+							if(isFind){
+								sprintf(buffer, "Devices %s, IP  %s, Count = %d\n",dname.c_str(), str_ip.c_str(), tmp);
+								send(*Iter, buffer, strlen(buffer)+1, MSG_NOSIGNAL);
+							} else {
+								sprintf(buffer, "This IP %s, not found\n", str_ip.c_str());
+								send(*Iter, buffer, strlen(buffer)+1, MSG_NOSIGNAL);
+							}
+							shutdown(*Iter, SHUT_RDWR);
+							close(*Iter);
+							SlaveSockets.erase(Iter);							
+						}
+				}	
 			}
-			statusLoop = 1;
-			
-		} else if(strcmp(str, STAT) == 0){
-			char buffer[BSIZE];
-			if(strcmp(buffer, STAT) == 0)
-			if(statusPrev == 1)
-				statusLoop = 1;		
-		}	
-
-
-		u_char * packet = 0;
-		struct pcap_pkthdr header;
+		}
+		if(FD_ISSET(master, &Set)){
+			int slave = accept(master, 0,0);
+//			set_nonblock(slave);
+			SlaveSockets.insert(slave);
+		}
 	
-		for(;statusLoop;){
-			
-			bytes = recv(slave, buffer, BSIZE, MSG_NOSIGNAL);
-			if(bytes > 0){
-				buffer[bytes] = '\0';
-				char * str = strtok(buffer, " ");
-				if(strcmp(str, STOP) == 0){
-					statusLoop = 0;
-				}
+		if(statusLoop){
+		
+			struct pcap_pkthdr header;
+		
+			u_char *packet = (u_char*) pcap_next(handler, &header);		
+			if(!packet){
+				;
+			} else {
+				const struct sniff_ip *ip = (struct sniff_ip*)(packet + SIZE_ETHERNET);
+				int size_ip = IP_HL(ip)*4;
+				if (size_ip < 20) ;
+				else Devices[currname].AddPacket(inet_ntoa(ip->ip_src));
 			}
-
-			packet = (u_char*) pcap_next(handler, &header);		
-			if(!packet) continue;
-
-			const struct sniff_ip *ip = (struct sniff_ip*)(packet + SIZE_ETHERNET);
-			int size_ip = IP_HL(ip)*4;
-			if (size_ip < 20) continue;
-
 		}
 	}
 }
 
-void CountDevices() {
+void CountDevices(NameDevices & devs) {
 
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_if_t * alldevsp;
-
 	if(pcap_findalldevs(&alldevsp, errbuf)){
-		perror(AC_RED"pcap_findalldevs");
-		fprintf(stderr,""AC_RESET);
+		perror(AC_RED"pcap_findalldevs");		
 		return;
 	}
-
 	pcap_if_t * device = NULL;
-	int count = 0;
-
-	FILE * devices = fopen("/.listdevices.txt", "w+");
-	bool flag = true;
-	if(!devices) flag = false;
-	
-	for(device = alldevsp; device; device = device->next, ++count){
-		if(device->name != NULL && count < N)
-			strcpy(devs[count], device->name);
-		if(flag) fprintf(devices, "%s\n", devs[count]);
-	}
-	if(flag) fclose(devices);
+	for(device = alldevsp; device; device = device->next)
+		if(device->name != NULL)
+			devs.push_back(device->name);
 }
 
 int SocketSettings(void){
 	int master = socket(AF_INET, SOCK_STREAM , IPPROTO_TCP);
 	if(master == -1){
 		perror(AC_RED"socket");
-		printf(""AC_RESET);
 		return -1;
 	}
 	struct sockaddr_in addr;
@@ -118,91 +205,40 @@ int SocketSettings(void){
 	addr.sin_port = htons(12345);
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	if(bind(master, (struct sockaddr *)&addr, sizeof(addr)) == -1){
-		perror(AC_RED"bind");
-		printf(""AC_RESET);
+		perror(AC_RED"bind");		
 		return -1;
 	}
 	if(listen(master, SOMAXCONN) == -1){
-		perror(AC_RED"listen");
-		printf(""AC_RESET);				
+		perror(AC_RED"listen");		
 		return -1;
 	}
-	//set_nonblock(master);
+	set_nonblock(master);
 	int optval = 1;
 	if(setsockopt(master, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1){
-		perror(AC_RED"setsockopt");
-		printf(""AC_RESET);				
+		perror(AC_RED"setsockopt");		
 		return -1;
 	}
 	return master;
 }
 
-void DefineCommand(char * command, int slave, pcap_t * handler) {
-		
-	 /*else if(strcmp(str, SELECT) == 0){
-		int i;
-		for(i = 0; str[i] == command[i]; ++i)
-			;
-		pcap_t * tmph = JoinInterface(command+i+1);
-		if(!handler){
-			fprintf(stderr, AC_RED"Unable to join the interface\n"AC_RESET);
-			statusLoop = 1;
-			return;
-		}
-		handler = tmph;
-		statusLoop = 1;
-		int x;
-		if((x = SearchDName(command+i+1)) == -1){
-			strcpy(dname[currindex], command+i+1);
-			currindex = maxindex;
-			maxindex++;
-		} else currindex = x;
-		
-		statusLoop = 1;
-		SniffsPackets(handler);
-
-	}  else if(strcmp(str, SHOW) == 0){
-		int i;
-		for(i = 0; str[i] == command[i]; ++i)
-			;
-		Data d;
-		strcpy(d.address_ip, command+i+1);
-		d.count_ip = 1;
-		for(int i = 0; i < maxindex; ++i){
-			node * tmp = root[i];
-			node * f = NULL;
-			if((f = search(tmp, d)) != NULL){
-				char sb[BSIZE];
-				sprintf(sb,"Device: %s, IP: %s, Count: %d", dname[i], f->key.address_ip, f->key.count_ip);
-				send(slave, sb, strlen(sb), MSG_NOSIGNAL);
-			}
-		}
-		statusLoop = 1;
-		SniffsPackets(handler);
-	}
-	*/
-}
-
-pcap_t *JoinInterface(const char * interface){
+pcap_t *JoinInterface(NameDevices & devs, const char * interface){
 	pcap_t * handler = NULL;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	bool isOk = false;
-	for(int i = 0; i < N; ++i)
-		if(strcmp(devs[i], interface) == 0){
+	for(auto it : devs)
+		if(it == interface){
+			currname = interface;
 			handler = pcap_open_live(interface, BUFSIZ, 1, 10000, errbuf);
 			isOk = true;
 			break;
 		}
-	if(!isOk) handler = pcap_open_live(devs[0], BUFSIZ, 1, 10000, errbuf);
+	if(!isOk){
+		 handler = pcap_open_live(currname.c_str(), BUFSIZ, 1, 10000, errbuf);
+	}
 	
 	return handler;
 }
 
-
-void StopLoopHandler(int val){
-	statusPrev = statusLoop;
-	statusLoop = 0;
-}
 
 int set_nonblock(int fd){
 	int flags;
@@ -214,17 +250,4 @@ int set_nonblock(int fd){
 	flags = 1;
 	return ioctl(fd, FIOBIO, &flags);
 #endif
-}
-
-int SavePid(void) {
-	static int once_file = 0;
-	if(once_file == 0){
-		FILE * tmp = fopen("/.pid_daemon.txt", "w+");
-		if(tmp != NULL) {
-			fprintf(tmp,"%d", getpid());
-			++once_file;
-			fclose(tmp);
-			return 0;
-		} else return -1;
-	}
 }

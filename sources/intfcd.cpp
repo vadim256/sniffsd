@@ -2,6 +2,17 @@
 #include "../headers/intfcd.h"
 #include "../headers/coloroutput.h"
 
+int set_nonblock(int *fd){
+	int flags;
+#if defined(O_NONBLOCK)
+	if((flags = fcntl(*fd, F_GETFL,0)) == -1)
+		flags = 0;
+	return fcntl(*fd, F_SETFL, flags|O_NONBLOCK);
+#else 
+	flags = 1;
+	return ioctl(*fd, FIOBIO, &flags);
+#endif
+}
 static int master = 0;
 int main(int argc, char ** argv){
 	const struct option daemon_opts[] = {
@@ -65,10 +76,7 @@ int CreateDaemon(){
 }
 
 int StopDaemon() {
-	/*int pid = FindPidDaemon();
-	if(pid > 0)
-			kill(pid, SIGUSR1);
-	else fprintf(stderr, AC_RED"Don`t find pid daemon\n"AC_RESET);*/
+	
 	if(!master){
 		if(EstablishToConnection(&master) == -1){
 			return -1;
@@ -96,10 +104,6 @@ int StatDaemon(const char * device) {
 			return -1;
 		}
 	}
-	int pid = FindPidDaemon();
-		if(pid > 0)
-			kill(pid, SIGUSR1);
-	else fprintf(stderr, AC_RED"Don`t find pid daemon\n"AC_RESET);
 	const char *stat = "stat ";
 	SendDaemonCommand(stat, device);
 	
@@ -122,10 +126,6 @@ int ShowPacketsIPDaemon(const char * ip) {
 		fprintf(stderr, AC_RED"IP address not entered\n" AC_RESET);		
 		return 4;
 	}
-	int pid = FindPidDaemon();
-		if(pid > 0)
-			kill(pid, SIGUSR1);
-	else fprintf(stderr, AC_RED"Don`t find pid daemon\n"AC_RESET);
 
 	const char * show = "show ";
 	SendDaemonCommand(show, ip);
@@ -147,10 +147,6 @@ int SelectDeviceDaemon(const char * device) {
 		fprintf(stderr, AC_RED"Device name not entered\n" AC_RESET);		
 		return 5;
 	}
-	int pid = FindPidDaemon();
-		if(pid > 0)
-			kill(pid, SIGUSR1);
-	else fprintf(stderr, AC_RED"Don`t find pid daemon\n"AC_RESET);
 	
 	const char * select = "select ";
 	SendDaemonCommand(select, device);
@@ -187,20 +183,8 @@ int EstablishToConnection(int * master){
 		printf(""AC_RESET);
 		return -1;
 	}
+	
 	return 0;
 }
-int FindPidDaemon(void) {
-		FILE * tmp = fopen("/.pid_daemon.txt", "r+");
-		if(tmp == NULL){
-			perror("fopen");
-			return -1;
-		}
-		char buffer[128];
-		fgets(buffer, 128, tmp);
-		fclose(tmp);
 
-		int daemon_pid = atoi(buffer);
-		if(daemon_pid <= 0)
-			return -1;
-		else return daemon_pid;
-}
+

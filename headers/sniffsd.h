@@ -21,10 +21,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 
-
 #define ROOT_DIR "/"
-#define LPBACK_IP "0.0.0.0"
-#define F_IP 1
 #define START "start"
 #define NETHERNET "eth0"
 #define SELECT "select"
@@ -56,15 +53,38 @@ struct sniff_ip {
 #define N 128
 #define M 256
 #define BSIZE  1024
-void CountDevices(void);
-void Daemon(void);
 
+#include <set>
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <map>
+#include <unordered_map>
+#include <vector>
+
+struct NetData{
+    
+    using Packets = std::map<std::string, std::size_t>;
+    using Packet = std::pair<std::string, std::size_t>;
+    NetData() = default;
+    
+    void AddPacket(const std::string &);
+    Packets  GetPackets() const;
+    int FindPacket(const std::string &);
+    
+    
+private:    
+    Packets packets_m;
+};
+using NetDevices = std::unordered_map<std::string, NetData>;
+using Slaves = std::set<int>;
+using NameDevices = std::vector<std::string>;
+
+pcap_t *JoinInterface(NameDevices &, const char *);
+void CountDevices(NameDevices &);
+
+void Daemon(void);
 int SocketSettings(void);
 int set_nonblock(int);
-pcap_t *JoinInterface(const char *);
-
-void StopLoopHandler(int);
-int SavePid(void);
-
 
 #endif

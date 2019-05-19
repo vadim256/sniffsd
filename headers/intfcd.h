@@ -33,6 +33,7 @@ static const char * const help_str =
 
 int StopDaemon();
 int StartDaemon();
+int set_nonblock(int);
 
 int StatDaemon(const char *);
 int ShowPacketsIPDaemon(const char *);
@@ -42,6 +43,6 @@ void PrintOptionsInfo(void);
 int SendDaemonCommand(const char *, const char*);
 int EstablishToConnection(int *);
 int CreateDaemon(void);
-int FindPidDaemon(void);
+
 
 #endif
