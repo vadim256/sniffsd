@@ -19,14 +19,19 @@ int NetData::FindPacket(const std::string & address_ip){
 }
 NetData::Packets  NetData::GetPackets() const { return packets_m; }
 
+void NetData::InsertPacket(const NetData::Packet & packets){
+	packets_m.insert(packets);
+}
+
 static int statusLoop = 0;
 static std::string currname;
+
 int main(void){
 
 	pid_t pid = fork();
 
 	if(pid == -1){
-		fprintf(stderr, AC_RED"[error] failed to create process\n"AC_RESET);
+		fprintf(stderr, "[error] failed to create process\n");
 		exit(1);
 	}
 	if(pid == 0){
@@ -48,10 +53,10 @@ void Daemon(void) {
 	}
 	Slaves SlaveSockets;
 	NetDevices Devices;
+
 	static char buffer[BSIZE];
 	pcap_t * handler = 0;
-	for(int i = 0; i < 10; ++i)
-		Devices["wlp3s0"].AddPacket("0.0.0.0");
+	
 	while(1){
 		
 		fd_set Set;
@@ -80,7 +85,7 @@ void Daemon(void) {
 						if(strcmp(str, START) == 0){
 							handler = JoinInterface(devs, NETHERNET);
 							if(!handler){
-								fprintf(stderr, AC_RED"Unable to join the interface\n"AC_RESET);					
+								fprintf(stderr,"Unable to join the interface\n");					
 								return;
 							}
 							statusLoop = 1;
@@ -97,7 +102,7 @@ void Daemon(void) {
 								}
 								shutdown(*Iter, SHUT_RDWR);
 								close(*Iter);
-								SlaveSockets.erase(Iter);							
+								SlaveSockets.erase(Iter);	
 							} else {
 								int i;
 								for(i = 0; buffer[i] == str[i] && str[i] != '\0'; ++i)
@@ -116,7 +121,7 @@ void Daemon(void) {
 									SlaveSockets.erase(Iter);							
 								}
 							}							
-						} else if(strcmp(str, STOP) == 0){
+						} else if(strcmp(str, STOP) == 0){							
 							statusLoop = 0;
 						} else if(strcmp(str, SELECT) == 0){
 							int i;
@@ -125,7 +130,7 @@ void Daemon(void) {
 							std::string str_name = buffer+i+1;
 							handler = JoinInterface(devs, str_name.c_str());
 							if(!handler){
-								fprintf(stderr, AC_RED"Unable to join the interface\n"AC_RESET);
+								fprintf(stderr, "Unable to join the interface\n");
 							} 
 						} else if(strcmp(str, SHOW) == 0){
 							int i;
@@ -159,10 +164,8 @@ void Daemon(void) {
 		}
 		if(FD_ISSET(master, &Set)){
 			int slave = accept(master, 0,0);
-//			set_nonblock(slave);
 			SlaveSockets.insert(slave);
 		}
-	
 		if(statusLoop){
 		
 			struct pcap_pkthdr header;
@@ -185,7 +188,7 @@ void CountDevices(NameDevices & devs) {
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_if_t * alldevsp;
 	if(pcap_findalldevs(&alldevsp, errbuf)){
-		perror(AC_RED"pcap_findalldevs");		
+		perror("pcap_findalldevs");		
 		return;
 	}
 	pcap_if_t * device = NULL;
@@ -197,7 +200,7 @@ void CountDevices(NameDevices & devs) {
 int SocketSettings(void){
 	int master = socket(AF_INET, SOCK_STREAM , IPPROTO_TCP);
 	if(master == -1){
-		perror(AC_RED"socket");
+		perror("socket");
 		return -1;
 	}
 	struct sockaddr_in addr;
@@ -205,17 +208,17 @@ int SocketSettings(void){
 	addr.sin_port = htons(12345);
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	if(bind(master, (struct sockaddr *)&addr, sizeof(addr)) == -1){
-		perror(AC_RED"bind");		
+		perror("bind");		
 		return -1;
 	}
 	if(listen(master, SOMAXCONN) == -1){
-		perror(AC_RED"listen");		
+		perror("listen");		
 		return -1;
 	}
 	set_nonblock(master);
 	int optval = 1;
 	if(setsockopt(master, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1){
-		perror(AC_RED"setsockopt");		
+		perror("setsockopt");		
 		return -1;
 	}
 	return master;

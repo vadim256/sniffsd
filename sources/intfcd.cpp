@@ -2,17 +2,6 @@
 #include "../headers/intfcd.h"
 #include "../headers/coloroutput.h"
 
-int set_nonblock(int *fd){
-	int flags;
-#if defined(O_NONBLOCK)
-	if((flags = fcntl(*fd, F_GETFL,0)) == -1)
-		flags = 0;
-	return fcntl(*fd, F_SETFL, flags|O_NONBLOCK);
-#else 
-	flags = 1;
-	return ioctl(*fd, FIOBIO, &flags);
-#endif
-}
 static int master = 0;
 int main(int argc, char ** argv){
 	const struct option daemon_opts[] = {
@@ -170,8 +159,7 @@ int SendDaemonCommand(const char * command, const char * opt){
 int EstablishToConnection(int * master){
 	*master = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if(*master == -1){
-		perror(AC_RED"socket");
-		printf(""AC_RESET);
+		perror(AC_RED"socket");		
 		return -1;
 	}
 	struct sockaddr_in addr;
@@ -180,10 +168,8 @@ int EstablishToConnection(int * master){
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	if(connect(*master, (struct sockaddr *) &addr, sizeof(addr)) == -1){
 		perror(AC_RED"connect");
-		printf(""AC_RESET);
 		return -1;
-	}
-	
+	}	
 	return 0;
 }
 

@@ -61,7 +61,7 @@ struct sniff_ip {
 #include <map>
 #include <unordered_map>
 #include <vector>
-
+#include <fstream>
 struct NetData{
     
     using Packets = std::map<std::string, std::size_t>;
@@ -71,7 +71,7 @@ struct NetData{
     void AddPacket(const std::string &);
     Packets  GetPackets() const;
     int FindPacket(const std::string &);
-    
+    void InsertPacket(const NetData::Packet &);
     
 private:    
     Packets packets_m;
